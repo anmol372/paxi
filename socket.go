@@ -1,6 +1,7 @@
 package paxi
 
 import (
+	"fmt"
 	"math/rand"
 	"sync"
 	"time"
@@ -19,6 +20,9 @@ type Socket interface {
 
 	// MulticastQuorum sends msg to random number of nodes
 	MulticastQuorum(quorum int, m interface{})
+
+	//MulticastRandom sends msg to random nodes
+	MulticastRandom(nodePercent int, m interface{})
 
 	// Broadcast send to all peers
 	Broadcast(m interface{})
@@ -153,6 +157,41 @@ func (s *socket) MulticastQuorum(quorum int, m interface{}) {
 			break
 		}
 	}
+}
+
+func (s *socket) MulticastRandom(nodePercent int, m interface{}) {
+	fmt.Printf("in multicast random\n")
+	totalNodes := len(s.addresses)
+	nodes := totalNodes * nodePercent / 100
+	fmt.Printf("total nodes: %v, send to: %v\n", totalNodes, nodes)
+	if totalNodes < 3 {
+		s.Broadcast(m)
+	}
+	randMap := make(map[int]int)
+	addressMap := make(map[int]ID)
+	j := 0
+	for id := range s.addresses {
+		if id != s.id {
+			addressMap[j] = id
+			j++
+		}
+	}
+	//provide random seed
+	rand.Seed(time.Now().UnixNano())
+	i := 0
+	for i < nodes {
+		randomnumber := rand.Intn(totalNodes)
+		if _, ok := randMap[randomnumber]; !ok {
+			randMap[randomnumber] = randomnumber
+			id, okk := addressMap[randomnumber]
+			if okk {
+				fmt.Printf("sending to node %v\n", id)
+				s.Send(id, m)
+				i++
+			}
+		}
+	}
+	fmt.Printf("done sending\n")
 }
 
 func (s *socket) Broadcast(m interface{}) {

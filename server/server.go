@@ -2,7 +2,10 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"sync"
+
+	"github.com/ailidani/paxi/avalanche"
 
 	"github.com/ailidani/paxi"
 	"github.com/ailidani/paxi/abd"
@@ -33,8 +36,8 @@ func replica(id paxi.ID) {
 		paxi.ConnectToMaster(*master, false, id)
 	}
 
-	log.Infof("node %v starting...", id)
-
+	log.Infof("node id: %v starting...", id)
+	fmt.Printf("node id: %v starting...", id)
 	switch *algorithm {
 
 	case "paxos":
@@ -78,6 +81,9 @@ func replica(id paxi.ID) {
 
 	case "hpaxos":
 		hpaxos.NewReplica(id).Run()
+	case "avalanche":
+		fmt.Printf("run new avalanche replica")
+		avalanche.NewReplica(id).Run()
 
 	default:
 		panic("Unknown algorithm")
@@ -93,10 +99,12 @@ func main() {
 		paxi.Simulation()
 		for id := range paxi.GetConfig().Addrs {
 			n := id
+			//fmt.Printf("node id %v", n)
 			go replica(n)
 		}
 		wg.Wait()
 	} else {
+		fmt.Printf("node id %v\n", paxi.ID(*id))
 		replica(paxi.ID(*id))
 	}
 }

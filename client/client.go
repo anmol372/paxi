@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/binary"
 	"flag"
+	"fmt"
 
 	"github.com/ailidani/paxi"
 	"github.com/ailidani/paxi/chain"
@@ -58,6 +59,9 @@ func main() {
 		d.Client = paxos.NewClient(paxi.ID(*id))
 	case "chain":
 		d.Client = chain.NewClient()
+	case "avalanche":
+		fmt.Println("in avalanche")
+		d.Client = paxi.NewHTTPClient(paxi.ID(*id))
 	default:
 		d.Client = paxi.NewHTTPClient(paxi.ID(*id))
 	}

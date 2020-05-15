@@ -251,17 +251,18 @@ func (b *Benchmark) worker(keys <-chan int, result chan<- time.Duration) {
 	for k := range keys {
 		op := new(operation)
 		if rand.Float64() < b.W {
-			v = rand.Int()
+			//Intn(n) -> [0,n)
+			v = rand.Intn(2)
 			s = time.Now()
 			err = b.db.Write(k, v)
 			e = time.Now()
 			op.input = v
-		} else {
+		} /*else {
 			s = time.Now()
 			v, err = b.db.Read(k)
 			e = time.Now()
 			op.output = v
-		}
+		}*/
 		op.start = s.Sub(b.startTime).Nanoseconds()
 		if err == nil {
 			op.end = e.Sub(b.startTime).Nanoseconds()

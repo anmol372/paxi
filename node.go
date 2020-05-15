@@ -59,6 +59,11 @@ func (n *node) Retry(r Request) {
 func (n *node) Register(m interface{}, f interface{}) {
 	t := reflect.TypeOf(m)
 	fn := reflect.ValueOf(f)
+	//fmt.Printf("type of m: %v\n", reflect.TypeOf(m))
+	//fmt.Printf("fn.type().NumIn(): %v\n", fn.Type().NumIn())
+	//fmt.Printf("fn.Kind(): %v\n", fn.Kind())
+	//fmt.Printf("fn.Type().In(0): %v = %v\n", fn.Type().In(0), t)
+
 	if fn.Kind() != reflect.Func || fn.Type().NumIn() != 1 || fn.Type().In(0) != t {
 		panic("register handle function error")
 	}
