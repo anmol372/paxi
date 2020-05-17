@@ -21,8 +21,9 @@ type Socket interface {
 	// MulticastQuorum sends msg to random number of nodes
 	MulticastQuorum(quorum int, m interface{})
 
+	//if numNodes provided sends m to random numNodes else sends to percent of nodes provided
 	//MulticastRandom sends msg to random nodes
-	MulticastRandom(nodePercent int, m interface{})
+	MulticastRandom(nodePercent int, numNodes int, m interface{})
 
 	// Broadcast send to all peers
 	Broadcast(m interface{})
@@ -159,7 +160,7 @@ func (s *socket) MulticastQuorum(quorum int, m interface{}) {
 	}
 }
 
-func (s *socket) MulticastRandom(nodePercent int, m interface{}) {
+func (s *socket) MulticastRandom(nodePercent int, numNodes int, m interface{}) {
 	fmt.Printf("in multicast random\n")
 	totalNodes := len(s.addresses)
 	nodes := totalNodes * nodePercent / 100
@@ -178,6 +179,9 @@ func (s *socket) MulticastRandom(nodePercent int, m interface{}) {
 	}
 	//provide random seed
 	rand.Seed(time.Now().UnixNano())
+	if numNodes > 0 {
+		nodes = numNodes
+	}
 	i := 0
 	for i < nodes {
 		randomnumber := rand.Intn(totalNodes)

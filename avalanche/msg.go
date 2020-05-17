@@ -22,6 +22,7 @@ type Query struct {
 	Sender     paxi.ID
 	MID        float64 //message ID
 	FromClient bool    //query from client = true, from server = false
+	Iter       int
 	//Slot   int
 }
 
@@ -31,10 +32,12 @@ func (m Query) String() string {
 
 //Reply message for query
 type Reply struct {
-	Sender   paxi.ID
-	Reciever paxi.ID
-	Color    uint64
-	MID      float64
+	Sender     paxi.ID
+	Reciever   paxi.ID
+	Color      uint64
+	FromClient bool //query from client = true, from server = false
+	MID        float64
+	Iter       int
 }
 
 func (r Reply) String() string {
