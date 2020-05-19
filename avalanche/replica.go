@@ -2,6 +2,7 @@ package avalanche
 
 import (
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/ailidani/paxi"
@@ -24,6 +25,7 @@ type Request struct {
 }
 
 var RecvFrom chan Request
+var wg sync.WaitGroup
 
 //var index int64
 
@@ -77,8 +79,10 @@ func (r *Replica) handleRequest(m paxi.Request) {
 		fmt.Printf("manipulated value %v\n, color: %v and sent to handle request\n", m, m.Command.Value)
 		*/
 		//go r.checkTimeout()
+		//wg.Add(2)
 		//go r.maintainTimer()
-		go r.Avalanche.HandleRequest(m)
+		//go
+		r.Avalanche.HandleRequest(m)
 
 	}
 	//ignored get in benchmark.go
@@ -92,17 +96,21 @@ func (r *Replica) maintainTimer() {
 	fmt.Println("hello")
 	RecvFrom = make(chan Request)
 	for {
+		//fmt.Printf("$")
 		select {
 		case req := <-RecvFrom:
+			//wg.Add(1)
 			//go
 			r.startTimer(req)
+			//default:
 		}
-
+		//fmt.Printf("!")
 	}
 	//fmt.Println("broke free now what")
 }
 
 func (r *Replica) startTimer(req Request) {
+	//defer wg.Done()
 	fmt.Printf("starting timer for slot: %v, iter: %v\n", req.slot, req.mIter)
 	time.Sleep(1000 * time.Millisecond)
 	for {

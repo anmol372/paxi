@@ -37,39 +37,40 @@ var loopRound int //loop size
 // entry in log
 type entry struct {
 	//ballot  paxi.Ballot
-	command        paxi.Command
-	commit         bool
-	request        *paxi.Request
-	timestamp      time.Time
-	query          uint64 //paxi.Value
-	result         int
-	Red            []int
-	Blue           []int
-	PerQueryResult []int
-	PerIterRecvd   []int
-	RecvReplies    int
-	FromClient     bool
-	CompletedIter  int
-	Q              Query
-	Replied        bool
-	//recv        int
-	//redInternal  int
-	//blueInternal int
+	command         paxi.Command
+	commit          bool
+	request         *paxi.Request
+	timestamp       time.Time
+	query           uint64 //paxi.Value
+	result          int
+	Red             []int
+	Blue            []int
+	PerQueryResult  []int
+	PerIterRecvd    []int
+	RecvReplies     int
+	FromClient      bool
+	CompletedIter   int
+	Q               Query
+	Replied         bool
+	RedConsecutive  int
+	BlueConsecutive int
+	RedConfidence   int //confidence in red
+	BlueConfidence  int //confidence in blue
 }
 
 // Avalanche instance
 type Avalanche struct {
 	paxi.Node
 
-	config         []paxi.ID
-	N              paxi.Config
-	log            map[float64]*entry // log ordered by slot
-	requests       []*paxi.Request
-	slot           float64 // highest slot number
-	execute        float64
-	Color          int //nodes current color
-	RedConfidence  int //confidence in red
-	BlueConfidence int //confidence in blue
+	config   []paxi.ID
+	N        paxi.Config
+	log      map[float64]*entry // log ordered by slot
+	requests []*paxi.Request
+	slot     float64 // highest slot number
+	execute  float64
+	Color    int //nodes current color
+	//RedConfidence  int //confidence in red
+	//BlueConfidence int //confidence in blue
 }
 
 // NewAvalanche creates new avalanche instance
@@ -86,14 +87,14 @@ func NewAvalanche(n paxi.Node, options ...func(*Avalanche)) *Avalanche {
 	//Intn(n) -> [0,n)
 	randomColor := rand.Intn(3)
 	p := &Avalanche{
-		Node:           n,
-		log:            make(map[float64]*entry, paxi.GetConfig().BufferSize),
-		slot:           -1.0,
-		execute:        0.0,
-		requests:       make([]*paxi.Request, 0),
-		Color:          randomColor,
-		RedConfidence:  0,
-		BlueConfidence: 0,
+		Node:     n,
+		log:      make(map[float64]*entry, paxi.GetConfig().BufferSize),
+		slot:     -1.0,
+		execute:  0.0,
+		requests: make([]*paxi.Request, 0),
+		Color:    randomColor,
+		//RedConfidence:  0,
+		//BlueConfidence: 0,
 	}
 	InitSlot, _ = strconv.ParseFloat(string(p.ID()), 8)
 	fmt.Printf("\ncolor %v\ntotalNodes %v\n", p.Color, totalNodes)
@@ -116,25 +117,40 @@ func (a *Avalanche) HandleRequest(r paxi.Request) {
 	fmt.Printf("Query for: %v\n", int(q))
 	a.slot = a.slot + 1
 	MSlot = a.slot
-	Rd := make([]int, loopRound+1)
+	/*Rd := make([]int, loopRound+1)
 	Bl := make([]int, loopRound+1)
 	Pr := make([]int, loopRound+1)
-	Pir := make([]int, loopRound+1)
+	Pir := make([]int, loopRound+1)*/
+	var Rd []int
+	var Bl []int
+	var Pr []int
+	var Pir []int
 	a.log[a.slot] = &entry{
 		command:   r.Command,
 		request:   &r,
 		timestamp: time.Now(),
 		query:     q, //r.Command.Value
 		//result:      0,
-		Red:            Rd,
-		Blue:           Bl,
-		PerQueryResult: Pr,
-		PerIterRecvd:   Pir,
-		RecvReplies:    expRep,
-		FromClient:     true,
-		CompletedIter:  0,
-		Replied:        false,
+		Red:             Rd,
+		Blue:            Bl,
+		PerQueryResult:  Pr,
+		PerIterRecvd:    Pir,
+		RecvReplies:     expRep,
+		FromClient:      true,
+		CompletedIter:   0,
+		Replied:         false,
+		RedConsecutive:  0,
+		BlueConsecutive: 0,
+		RedConfidence:   0,
+		BlueConfidence:  0,
 	}
+	a.log[a.slot].Red = append(a.log[a.slot].Red, 0)
+	a.log[a.slot].Blue = append(a.log[a.slot].Blue, 0)
+	a.log[a.slot].PerQueryResult = append(a.log[a.slot].PerQueryResult, 0)
+	a.log[a.slot].PerIterRecvd = append(a.log[a.slot].PerIterRecvd, 0)
+
+	fmt.Printf("iter=%d len=%d cap=%d %v\n", 0, len(a.log[a.slot].Red), cap(a.log[a.slot].Red), a.log[a.slot].Red)
+
 	fmt.Printf("Entry to log -> Key: %v, Value: %v\n", a.slot, a.log[a.slot])
 	//if color '0' add 1 else if '1' sub 1
 	/*if a.color == 0 {
@@ -180,7 +196,8 @@ func (a *Avalanche) HandleRequest(r paxi.Request) {
 	fmt.Printf("now multicasting randomly: %v\n", m)
 	a.MulticastRandom(sampleSize, 0, m)
 
-	//	time.Sleep(10 * time.Millisecond)
+	//time.Sleep(10 * time.Millisecond)
+	//fmt.Println("Awake now")
 	//}
 	/*go func() {
 		<-clientQ0timer[a.slot].C
@@ -217,10 +234,16 @@ func (a *Avalanche) HandleQuery(m Query) {
 		a.Color = int(m.Color)
 		//create entry in local log and send to sampleSize random nodes
 		//log entry
-		Rd := make([]int, loopRound+1)
-		Bl := make([]int, loopRound+1)
-		Pr := make([]int, loopRound+1)
-		Pir := make([]int, loopRound+1)
+		/*
+			Rd := make([]int, loopRound+1)
+			Bl := make([]int, loopRound+1)
+			Pr := make([]int, loopRound+1)
+			Pir := make([]int, loopRound+1)
+		*/
+		var Rd []int
+		var Bl []int
+		var Pr []int
+		var Pir []int
 		a.log[m.MID] = &entry{
 			timestamp: time.Now(),
 			query:     m.Color,
@@ -235,7 +258,17 @@ func (a *Avalanche) HandleQuery(m Query) {
 			Replied:    false,
 			//redInternal:  0,
 			//blueInternal: 0,
+			RedConsecutive:  0,
+			BlueConsecutive: 0,
+			RedConfidence:   0,
+			BlueConfidence:  0,
 		}
+		a.log[m.MID].Red = append(a.log[m.MID].Red, 0)
+		a.log[m.MID].Blue = append(a.log[m.MID].Blue, 0)
+		a.log[m.MID].PerQueryResult = append(a.log[m.MID].PerQueryResult, 0)
+		a.log[m.MID].PerIterRecvd = append(a.log[m.MID].PerIterRecvd, 0)
+
+		fmt.Printf("iter=%d len=%d cap=%d %v\n", 0, len(a.log[m.MID].Red), cap(a.log[m.MID].Red), a.log[m.MID].Red)
 		//message query
 		mq := Query{
 			ID:         m.ID,
@@ -249,15 +282,17 @@ func (a *Avalanche) HandleQuery(m Query) {
 		a.log[m.MID].Q = mq
 		//for i := 0; i < loopRound; i++ {
 		//mq.Iter = i
-		/*req := Request{
-			slot:            m.MID,  //float64
-			mIter:           m.Iter, // int
-			recvdReplies:    0,      // int
-			expectedReplies: expRep, //int
-			q:               mq,     //Query
-		}
-		fmt.Printf("recv: %v, expected: %v\n", a.log[m.MID].PerIterRecvd, expRep)
-		RecvFrom <- req*/
+		/*
+			req := Request{
+				slot:            m.MID,  //float64
+				mIter:           m.Iter, // int
+				recvdReplies:    0,      // int
+				expectedReplies: expRep, //int
+				q:               mq,     //Query
+			}
+			fmt.Printf("recv: %v, expected: %v\n", a.log[m.MID].PerIterRecvd, expRep)
+			RecvFrom <- req
+		*/
 
 		fmt.Printf("now multicasting randomly: %v\n", m)
 		a.MulticastRandom(sampleSize, 0, mq)
@@ -342,7 +377,7 @@ func (a *Avalanche) handleReply(m Reply) {
 	rColor := m.Color
 	rSlot := m.MID
 	rIter := m.Iter
-	flip := false
+	//flip := false
 
 	/*entry, error := a.log[rSlot]
 	if !error {
@@ -364,34 +399,34 @@ func (a *Avalanche) handleReply(m Reply) {
 		if a.log[rSlot].Red[rIter] > a.log[rSlot].Blue[rIter] {
 			//a.Color = 0
 			a.log[rSlot].PerQueryResult[rIter] = 0
-			a.RedConfidence++
+			a.log[rSlot].RedConfidence++
+			a.log[rSlot].RedConsecutive++
+			a.log[rSlot].BlueConsecutive = 0
 		} else if a.log[rSlot].Blue[rIter] > a.log[rSlot].Red[rIter] {
 			//a.Color = 1
 			a.log[rSlot].PerQueryResult[rIter] = 1
-			a.BlueConfidence++
+			a.log[rSlot].BlueConfidence++
+			a.log[rSlot].RedConsecutive = 0
+			a.log[rSlot].BlueConsecutive++
 		}
 		//fmt.Printf("Consenseus reached, decision: %v", a.Color)
 		a.log[rSlot].CompletedIter = rIter
 
-		if rIter == 0 && a.log[rSlot].PerQueryResult[rIter] != a.Color {
+		/*if rIter == 0 && a.log[rSlot].PerQueryResult[rIter] != a.Color {
 			flip = true
 		}
-
+		*/
 		//if iter > 0 check confidence and flip
-		if rIter > 0 {
-			fmt.Printf("Set Color According to Confidence\n")
-			/*if a.RedConfidence > a.BlueConfidence {
-				a.Color = 0
-			} else if a.BlueConfidence > a.RedConfidence {
-				a.Color = 1
-			}*/
-			a.checkConfidence()
-		}
+		//if rIter > 0 {
+		fmt.Printf("Set Color According to Confidence\n")
+		a.checkConfidence(rSlot)
+		//}
 
 		//} //end of current iter
 
-		if flip == false && rIter == 0 {
-			a.checkConfidence()
+		/*if flip == false && rIter == 0 {
+			//defer wg.Done()
+			a.checkConfidence(rSlot)
 			a.log[rSlot].result = a.Color
 			//if m.FromClient == false {
 
@@ -401,13 +436,14 @@ func (a *Avalanche) handleReply(m Reply) {
 				a.replyToClient(rSlot)
 			}
 			return
-		}
+		}*/
 
 		//done with m rounds after Oth initial round
-		if rIter >= loopRound {
-
+		//if rIter >= loopRound {
+		if (a.log[rSlot].RedConsecutive == 3 && a.log[rSlot].BlueConsecutive == 0) || (a.log[rSlot].RedConsecutive == 0 && a.log[rSlot].BlueConsecutive == 3) {
+			//defer wg.Done()
 			//may need to re-eval confidence
-			a.checkConfidence()
+			a.checkConfidence(rSlot)
 			a.log[rSlot].result = a.Color
 
 			if m.FromClient == true {
@@ -430,20 +466,30 @@ func (a *Avalanche) sendQuery(m Reply) {
 	rSlot := m.MID
 	rIter := m.Iter
 
+	a.log[rSlot].Red = append(a.log[rSlot].Red, 0)
+	a.log[rSlot].Blue = append(a.log[rSlot].Blue, 0)
+	a.log[rSlot].PerQueryResult = append(a.log[rSlot].PerQueryResult, 0)
+	a.log[rSlot].PerIterRecvd = append(a.log[rSlot].PerIterRecvd, 0)
+
+	fmt.Printf("iter=%d len=%d cap=%d %v\n", rIter+1, len(a.log[rSlot].Red), cap(a.log[rSlot].Red), a.log[rSlot].Red)
+
 	a.log[rSlot].Q.Iter = rIter + 1
 	mq := a.log[rSlot].Q
 
 	mq.Iter = m.Iter + 1
 
-	/*req := Request{
-		slot:            m.MID,  //float64
-		mIter:           m.Iter, // int
-		recvdReplies:    0,      // int
-		expectedReplies: expRep, //int
-		q:               mq,     //Query
-	}
-	fmt.Printf("recv: %v, expected: %v\n", a.log[rSlot].PerIterRecvd, expRep)
-	RecvFrom <- req*/
+	/*if m.FromClient == true {
+		wg.Add(1)
+		req := Request{
+			slot:            mq.MID,  //float64
+			mIter:           mq.Iter, // int
+			recvdReplies:    0,       // int
+			expectedReplies: expRep,  //int
+			q:               mq,      //Query
+		}
+		fmt.Printf("recv: %v, expected: %v\n", a.log[rSlot].PerIterRecvd, expRep)
+		RecvFrom <- req
+	}*/
 
 	fmt.Printf("now multicasting randomly: %v\n", m)
 
@@ -451,10 +497,10 @@ func (a *Avalanche) sendQuery(m Reply) {
 
 }
 
-func (a *Avalanche) checkConfidence() {
-	if a.RedConfidence > a.BlueConfidence {
+func (a *Avalanche) checkConfidence(rSlot float64) {
+	if a.log[rSlot].RedConfidence > a.log[rSlot].BlueConfidence {
 		a.Color = 0
-	} else if a.BlueConfidence > a.RedConfidence {
+	} else if a.log[rSlot].BlueConfidence > a.log[rSlot].RedConfidence {
 		a.Color = 1
 	}
 }
