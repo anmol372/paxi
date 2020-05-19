@@ -2,6 +2,7 @@ package avalanche
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/ailidani/paxi"
 	"github.com/ailidani/paxi/log"
@@ -13,6 +14,22 @@ type Replica struct {
 	*Avalanche
 	//mux sync.Mutex
 }
+
+type Request struct {
+	slot            float64
+	mIter           int
+	recvdReplies    int
+	expectedReplies int
+	q               Query
+}
+
+var RecvFrom chan Request
+
+//var index int64
+
+//var SendTo chan int
+
+//var Trial chan string
 
 const (
 	HTTPHeaderSlot = "Slot"
@@ -36,7 +53,11 @@ func NewReplica(id paxi.ID) *Replica {
 	r.Register(Reply{}, r.HandleReply)
 	//r.Register()
 
-	//return replica
+	//RecvFrom = make(chan Request)
+	//SendTo = make(chan int)
+	//go r.maintainTimer()
+	//index++
+
 	return r
 }
 
@@ -55,10 +76,57 @@ func (r *Replica) handleRequest(m paxi.Request) {
 		//m.Command.Value = bs
 		fmt.Printf("manipulated value %v\n, color: %v and sent to handle request\n", m, m.Command.Value)
 		*/
-		r.Avalanche.HandleRequest(m)
+		//go r.checkTimeout()
+		//go r.maintainTimer()
+		go r.Avalanche.HandleRequest(m)
+
 	}
 	//ignored get in benchmark.go
 	if m.Command.IsRead() {
 		return
 	}
+	//select {}
+}
+
+func (r *Replica) maintainTimer() {
+	fmt.Println("hello")
+	RecvFrom = make(chan Request)
+	for {
+		select {
+		case req := <-RecvFrom:
+			//go
+			r.startTimer(req)
+		}
+
+	}
+	//fmt.Println("broke free now what")
+}
+
+func (r *Replica) startTimer(req Request) {
+	fmt.Printf("starting timer for slot: %v, iter: %v\n", req.slot, req.mIter)
+	time.Sleep(1000 * time.Millisecond)
+	for {
+		//fmt.Printf("From start timer after timeout \n:::::::\n [%v]", r.Avalanche.log[req.slot].PerIterRecvd[req.mIter])
+		if _, ok := r.Avalanche.log[req.slot]; ok {
+			//fmt.Println("116")
+			if r.Avalanche.log[req.slot].PerIterRecvd[req.mIter] < req.expectedReplies {
+
+				send := req.expectedReplies - r.Avalanche.log[req.slot].PerIterRecvd[req.mIter]
+				fmt.Println("needs some resends")
+				r.Avalanche.MulticastRandom(0, send, req.q)
+				time.Sleep(100 * time.Millisecond)
+			} else if r.Avalanche.log[req.slot].PerIterRecvd[req.mIter] >= req.expectedReplies {
+				//return
+				fmt.Println("in else startTimer")
+				//time.Sleep(24 * time.Hour)
+				break
+			}
+		} else {
+			fmt.Printf("Entry %v gone", req.slot)
+			//return
+			break
+		}
+	}
+	//fmt.Println("return")
+
 }

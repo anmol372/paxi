@@ -9,6 +9,9 @@ import (
 	"github.com/ailidani/paxi/log"
 )
 
+//NoDuplicateSends maintains hash to not resend to same nodes innMulticastRandom
+var NoDuplicateSends = make(map[interface{}]map[ID]int)
+
 // Socket integrates all networking interface and fault injections
 type Socket interface {
 
@@ -161,10 +164,11 @@ func (s *socket) MulticastQuorum(quorum int, m interface{}) {
 }
 
 func (s *socket) MulticastRandom(nodePercent int, numNodes int, m interface{}) {
-	fmt.Printf("in multicast random\n")
+	//messageID := m.
+	fmt.Printf("\nin multicast random\nm:%v\n", m)
 	totalNodes := len(s.addresses)
 	nodes := totalNodes * nodePercent / 100
-	fmt.Printf("total nodes: %v, send to: %v\n", totalNodes, nodes)
+	fmt.Printf("total nodes: %v, send to: %v or %v\n", totalNodes, nodes, numNodes)
 	if totalNodes < 3 {
 		s.Broadcast(m)
 	}
@@ -183,15 +187,21 @@ func (s *socket) MulticastRandom(nodePercent int, numNodes int, m interface{}) {
 		nodes = numNodes
 	}
 	i := 0
+	if _, ok := NoDuplicateSends[m]; !ok {
+		NoDuplicateSends[m] = make(map[ID]int)
+	}
 	for i < nodes {
 		randomnumber := rand.Intn(totalNodes)
 		if _, ok := randMap[randomnumber]; !ok {
 			randMap[randomnumber] = randomnumber
 			id, okk := addressMap[randomnumber]
 			if okk {
-				fmt.Printf("sending to node %v\n", id)
-				s.Send(id, m)
-				i++
+				if _, okkk := NoDuplicateSends[m][id]; !okkk {
+					fmt.Printf("sending to node %v\n", id)
+					s.Send(id, m)
+					NoDuplicateSends[m][id] = 1
+					i++
+				}
 			}
 		}
 	}
