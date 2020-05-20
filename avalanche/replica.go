@@ -59,6 +59,7 @@ func NewReplica(id paxi.ID) *Replica {
 	//SendTo = make(chan int)
 	//go r.maintainTimer()
 	//index++
+	//go r.BadTimer()
 
 	return r
 }
@@ -89,7 +90,6 @@ func (r *Replica) handleRequest(m paxi.Request) {
 	if m.Command.IsRead() {
 		return
 	}
-	//select {}
 }
 
 func (r *Replica) maintainTimer() {
@@ -119,9 +119,9 @@ func (r *Replica) startTimer(req Request) {
 			//fmt.Println("116")
 			if r.Avalanche.log[req.slot].PerIterRecvd[req.mIter] < req.expectedReplies {
 
-				send := req.expectedReplies - r.Avalanche.log[req.slot].PerIterRecvd[req.mIter]
+				//send := req.expectedReplies - r.Avalanche.log[req.slot].PerIterRecvd[req.mIter]
 				fmt.Println("needs some resends")
-				r.Avalanche.MulticastRandom(0, send, req.q)
+				//r.Avalanche.MulticastRandom(0, send, req.q)
 				time.Sleep(100 * time.Millisecond)
 			} else if r.Avalanche.log[req.slot].PerIterRecvd[req.mIter] >= req.expectedReplies {
 				//return
@@ -138,3 +138,29 @@ func (r *Replica) startTimer(req Request) {
 	//fmt.Println("return")
 
 }
+
+/*
+//BadTimer trial exp 5
+func (r *Replica) BadTimer() {
+	//200 milliseconds in nanoseconds
+	var timeDiff int64 = 200 * 1000000
+	for {
+		time.Sleep(20 * time.Millisecond)
+		for k, v := range r.Avalanche.log {
+			if v.Replied != true {
+				for i := 0; i < len(v.TimeOfQuery); i++ {
+					if v.PerIterRecvd[i] >= GexpRep {
+						continue
+					}
+					diff := time.Now().UnixNano() - v.TimeOfQuery[i]
+					if diff >= timeDiff {
+						resendNumber := GexpRep - v.PerIterRecvd[i]
+						fmt.Printf("need %d resends, for %v iter %v", resendNumber, k, i)
+					}
+
+				}
+			}
+		}
+	}
+}
+*/

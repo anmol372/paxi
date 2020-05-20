@@ -10,7 +10,8 @@ import (
 )
 
 //NoDuplicateSends maintains hash to not resend to same nodes innMulticastRandom
-var NoDuplicateSends = make(map[interface{}]map[ID]int)
+//var NoDuplicateSends = make(map[interface{}]map[ID]int)
+var NoDuplicateSends = make(map[string]map[ID]int)
 
 // Socket integrates all networking interface and fault injections
 type Socket interface {
@@ -26,7 +27,7 @@ type Socket interface {
 
 	//if numNodes provided sends m to random numNodes else sends to percent of nodes provided
 	//MulticastRandom sends msg to random nodes
-	MulticastRandom(nodePercent int, numNodes int, m interface{})
+	MulticastRandom(nodePercent int, numNodes int, mident string, m interface{})
 
 	// Broadcast send to all peers
 	Broadcast(m interface{})
@@ -163,7 +164,7 @@ func (s *socket) MulticastQuorum(quorum int, m interface{}) {
 	}
 }
 
-func (s *socket) MulticastRandom(nodePercent int, numNodes int, m interface{}) {
+func (s *socket) MulticastRandom(nodePercent int, numNodes int, mident string, m interface{}) {
 	//messageID := m.
 	fmt.Printf("\nin multicast random\nm:%v\n", m)
 	totalNodes := len(s.addresses)
@@ -187,8 +188,31 @@ func (s *socket) MulticastRandom(nodePercent int, numNodes int, m interface{}) {
 		nodes = numNodes
 	}
 	i := 0
-	if _, ok := NoDuplicateSends[m]; !ok {
-		NoDuplicateSends[m] = make(map[ID]int)
+	/*
+		if _, ok := NoDuplicateSends[m]; !ok {
+			NoDuplicateSends[m] = make(map[ID]int)
+		}
+		for i < nodes {
+			randomnumber := rand.Intn(totalNodes)
+			if _, ok := randMap[randomnumber]; !ok {
+				randMap[randomnumber] = randomnumber
+				id, okk := addressMap[randomnumber]
+				if okk {
+					if _, okkk := NoDuplicateSends[m][id]; !okkk {
+						fmt.Printf("sending to node %v\n", id)
+						s.Send(id, m)
+						NoDuplicateSends[m][id] = 1
+						i++
+					} else if len(NoDuplicateSends[m]) == len(addressMap) {
+						fmt.Printf("Sent to all nodes\n")
+						return
+					}
+				}
+			}
+		}
+	*/
+	if _, ok := NoDuplicateSends[mident]; !ok {
+		NoDuplicateSends[mident] = make(map[ID]int)
 	}
 	for i < nodes {
 		randomnumber := rand.Intn(totalNodes)
@@ -196,11 +220,14 @@ func (s *socket) MulticastRandom(nodePercent int, numNodes int, m interface{}) {
 			randMap[randomnumber] = randomnumber
 			id, okk := addressMap[randomnumber]
 			if okk {
-				if _, okkk := NoDuplicateSends[m][id]; !okkk {
-					fmt.Printf("sending to node %v\n", id)
-					s.Send(id, m)
-					NoDuplicateSends[m][id] = 1
+				if _, okkk := NoDuplicateSends[mident][id]; !okkk {
+					fmt.Printf("sending to node %v for identifier:%s\n", id, mident)
+					NoDuplicateSends[mident][id] = 1
 					i++
+					s.Send(id, m)
+				} else if len(NoDuplicateSends[mident]) == len(addressMap) {
+					fmt.Printf("Sent to all nodes\n")
+					return
 				}
 			}
 		}
