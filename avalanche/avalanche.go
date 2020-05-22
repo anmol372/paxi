@@ -61,6 +61,7 @@ type entry struct {
 	BlueConsecutive int
 	RedConfidence   int //confidence in red
 	BlueConfidence  int //confidence in blue
+	Color           int
 }
 
 // Avalanche instance
@@ -73,7 +74,7 @@ type Avalanche struct {
 	requests []*paxi.Request
 	slot     float64 // highest slot number
 	execute  float64
-	Color    int //nodes current color
+	//Color    int //nodes current color
 	//RedConfidence  int //confidence in red
 	//BlueConfidence int //confidence in blue
 }
@@ -89,22 +90,22 @@ func NewAvalanche(n paxi.Node, options ...func(*Avalanche)) *Avalanche {
 	expRep = totalNodes * sampleSize / 100
 	GexpRep = expRep
 	//provide random seed
-	rand.Seed(time.Now().UnixNano())
+	/*rand.Seed(time.Now().UnixNano())
 	//0-red, 1-blue, 2-undeclared
 	//Intn(n) -> [0,n)
-	randomColor := rand.Intn(3)
+	randomColor := rand.Intn(3)*/
 	p := &Avalanche{
 		Node:     n,
 		log:      make(map[float64]*entry, paxi.GetConfig().BufferSize),
 		slot:     -1.0,
 		execute:  0.0,
 		requests: make([]*paxi.Request, 0),
-		Color:    randomColor,
+		//Color:    randomColor,
 		//RedConfidence:  0,
 		//BlueConfidence: 0,
 	}
 	InitSlot, _ = strconv.ParseFloat(string(p.ID()), 8)
-	fmt.Printf("\ncolor %v\ntotalNodes %v\n", p.Color, totalNodes)
+	//fmt.Printf("\ncolor %v\ntotalNodes %v\n", p.Color, totalNodes)
 	p.slot += InitSlot
 	for _, opt := range options {
 		opt(p)
@@ -124,6 +125,12 @@ func (a *Avalanche) HandleRequest(r paxi.Request) {
 	fmt.Printf("Query for: %v\n", int(q))
 	a.slot = a.slot + 1
 	MSlot = a.slot
+
+	rand.Seed(time.Now().UnixNano())
+	//0-red, 1-blue, 2-undeclared
+	//Intn(n) -> [0,n)
+	randomColor := rand.Intn(3)
+
 	/*Rd := make([]int, loopRound+1)
 	Bl := make([]int, loopRound+1)
 	Pr := make([]int, loopRound+1)
@@ -154,6 +161,7 @@ func (a *Avalanche) HandleRequest(r paxi.Request) {
 		BlueConsecutive: 0,
 		RedConfidence:   0,
 		BlueConfidence:  0,
+		Color:           randomColor,
 	}
 	a.log[a.slot].Red = append(a.log[a.slot].Red, 0)
 	a.log[a.slot].Blue = append(a.log[a.slot].Blue, 0)
@@ -169,8 +177,11 @@ func (a *Avalanche) HandleRequest(r paxi.Request) {
 	} else if a.color == 1 {
 		a.log[a.slot].result--
 	}*/
-	if a.Color == 2 {
+	/*if a.Color == 2 {
 		a.Color = int(q)
+	}*/
+	if a.log[a.slot].Color == 2 {
+		a.log[a.slot].Color = int(q)
 	}
 	//add iteration no parameter, add for loop
 	//for loop array of timers(if consensus, ok else resend for iteration)
@@ -233,10 +244,27 @@ func (a *Avalanche) HandleQuery(m Query) {
 	fmt.Printf("in slush loop, mid: %v iter: %v, from: %v\n", m.MID, m.Iter, m.Sender)
 	//reply to sender
 	color := m.Color
-	//if a.color == 0 || a.color == 1 {
-	if a.Color == 0 || a.Color == 1 {
-		color = uint64(a.Color)
+	var firstIter bool
+	rand.Seed(time.Now().UnixNano())
+	//0-red, 1-blue, 2-undeclared
+	//Intn(n) -> [0,n)
+	randomColor := rand.Intn(3)
+
+	if entry, ok := a.log[m.MID]; !ok {
+		colorOfNodeForQuery := randomColor
+		if colorOfNodeForQuery == 0 || colorOfNodeForQuery == 1 {
+			color = uint64(colorOfNodeForQuery)
+			firstIter = true
+		}
+	} else if ok {
+		color = uint64(entry.Color)
 	}
+
+	/*
+		if a.Color == 0 || a.Color == 1 {
+			color = uint64(a.Color)
+		}
+	*/
 	r := Reply{
 		Sender:     a.ID(),
 		Color:      color,
@@ -250,8 +278,10 @@ func (a *Avalanche) HandleQuery(m Query) {
 	a.Send(m.Sender, r)
 	//} else
 	//if color is undecided, send query to get reply
-	if a.Color == 2 {
-		a.Color = int(m.Color)
+	/*if a.Color == 2 {
+	a.Color = int(m.Color)*/
+	if firstIter == true && randomColor == 2 {
+
 		//create entry in local log and send to sampleSize random nodes
 		//log entry
 		/*
@@ -287,6 +317,7 @@ func (a *Avalanche) HandleQuery(m Query) {
 			BlueConsecutive: 0,
 			RedConfidence:   0,
 			BlueConfidence:  0,
+			Color:           int(m.Color),
 		}
 		a.log[m.MID].Red = append(a.log[m.MID].Red, 0)
 		a.log[m.MID].Blue = append(a.log[m.MID].Blue, 0)
@@ -482,7 +513,11 @@ func (a *Avalanche) handleReply(m Reply) {
 			//defer wg.Done()
 			//may need to re-eval confidence
 			a.checkConfidence(rSlot)
-			a.log[rSlot].result = a.Color
+			//a.log[rSlot].result = a.Color
+			a.log[rSlot].result = a.log[rSlot].Color
+			if m.FromClient == false {
+				a.log[rSlot].Replied = true
+			}
 
 			if m.FromClient == true && a.log[rSlot].Replied == false {
 				//send reply
@@ -491,7 +526,7 @@ func (a *Avalanche) handleReply(m Reply) {
 			return
 		} //else {
 		////continue query loop
-		a.SillyTimer()
+		//a.SillyTimer()
 		a.sendQuery(m)
 
 		//}
@@ -545,9 +580,11 @@ func (a *Avalanche) sendQuery(m Reply) {
 
 func (a *Avalanche) checkConfidence(rSlot float64) {
 	if a.log[rSlot].RedConfidence > a.log[rSlot].BlueConfidence {
-		a.Color = 0
+		//a.Color = 0
+		a.log[rSlot].Color = 0
 	} else if a.log[rSlot].BlueConfidence > a.log[rSlot].RedConfidence {
-		a.Color = 1
+		//a.Color = 1
+		a.log[rSlot].Color = 1
 	}
 }
 
